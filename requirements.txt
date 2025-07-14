@@ -7,4 +7,3 @@ gdown
 numpy
 pillow
 omegaconf
-pytorch_lightning
