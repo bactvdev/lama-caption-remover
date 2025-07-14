@@ -25,12 +25,12 @@ else
     echo "✅ best.ckpt already exists."
 fi
 
-pip install -r requirements.txt
+pip install -r lama/requirements.txt
 
 # ======================
 # 3. Cài đặt Ngrok CLI
 # ======================
-if ! command -v ngrok &> /dev/null; then
+if ! command -v ./ngrok &> /dev/null; then
     wget -q -O ngrok.zip https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-linux-amd64.zip
     unzip -o ngrok.zip
 else
