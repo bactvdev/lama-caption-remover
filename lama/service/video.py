@@ -1,8 +1,6 @@
-import subprocess
 from pathlib import Path
 import os
 from natsort import natsorted
-from concurrent.futures import ProcessPoolExecutor
 from PIL import Image
 import numpy as np
 import cv2
@@ -78,7 +76,8 @@ def remove_video_caption(input_file):
     )
 
 def _process_remove_caption_on_frame(input_image, output_image):
-    image_np = np.array(input_image)
+    image_np = cv2.imread(input_image)
+    # image_np = np.array(input_image)
 
     # Dùng OCR để phát hiện caption (text)
     results = reader.readtext(image_np)

@@ -46,3 +46,4 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 echo "✅ Done setting up!"
 
 # chmod +x install.sh
+# !cd lama-caption-remover && ./ngrok http --url=insect-ideal-unduly.ngrok-free.app 8000 --log=stdout
