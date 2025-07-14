@@ -1,6 +1,6 @@
 pyyaml
 tqdm
-numpy==1.24.4
+numpy
 easydict
 scikit-image
 scikit-learn
