@@ -39,6 +39,8 @@ fi
 
 ./ngrok config add-authtoken 2zrm3wOOXwW7QdbVajnB1zt1jgc_44gW91d6M8Y1ms9WYtpMs
 
+cd lama
+
 uvicorn main:app --host 0.0.0.0 --port 8000
 
 echo "✅ Done setting up!"
