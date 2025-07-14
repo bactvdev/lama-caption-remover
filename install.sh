@@ -12,7 +12,7 @@ CKPT_ID="1MBjuLv9HphGH1CKlKxwweTdZEXnkAdmB"
 # Download config.yaml
 if [ ! -f lama/models/big-lama/config.yaml ]; then
     echo "⬇️  Downloading config.yaml..."
-    gdown --id $CONFIG_ID -O models/big-lama/config.yaml
+    gdown --id $CONFIG_ID -O lama/models/big-lama/config.yaml
 else
     echo "✅ config.yaml already exists."
 fi
@@ -20,7 +20,7 @@ fi
 # Download best.ckpt
 if [ ! -f lama/models/big-lama/models/best.ckpt ]; then
     echo "⬇️  Downloading best.ckpt..."
-    gdown --id $CKPT_ID -O models/big-lama/models/best.ckpt
+    gdown --id $CKPT_ID -O lama/models/big-lama/models/best.ckpt
 else
     echo "✅ best.ckpt already exists."
 fi
