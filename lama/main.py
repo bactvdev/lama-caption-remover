@@ -2,7 +2,7 @@ import io
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image
-from lama.service.video import remove_video_caption
+from service.video import remove_video_caption
 import uuid
 
 # --- App FastAPI ---
