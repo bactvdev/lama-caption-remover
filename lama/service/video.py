@@ -76,6 +76,7 @@ def remove_video_caption(input_file):
     )
 
 def _process_remove_caption_on_frame(input_image, output_image):
+    print('process image: ', str(input_image))
     image_np = cv2.imread(input_image)
     # image_np = np.array(input_image)
 
