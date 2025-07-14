@@ -1,0 +1,9 @@
+easyocr
+webdataset
+fastapi
+uvicorn
+python-multipart
+gdown
+numpy
+pillow
+omegaconf
