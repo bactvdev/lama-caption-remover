@@ -118,105 +118,32 @@ def _process_remove_caption_on_frame(image_path_output_tuple):
     input_image, output_image = image_path_output_tuple
     print('process image:', str(input_image))
 
-    image_pil = Image.open(input_image).convert("RGB")
+    input_image = Image.open(input_image).convert("RGB")
+    image_np = np.array(input_image)
 
-    # Tạo mask bằng hàm bạn viết
-    mask_pil = generate_mask_from_text(reader, image_pil)
+    # Dùng OCR để phát hiện caption (text)
+    results = reader.readtext(image_np)
 
-    # Inpaint bằng OpenCV
-    image_np = np.array(image_pil)
-    mask_np = np.array(mask_pil)
-    inpainted_np = cv2.inpaint(image_np, mask_np, inpaintRadius=5, flags=cv2.INPAINT_NS)
+    # Tạo mask rỗng (đen hoàn toàn)
+    mask_dilated = np.zeros(image_np.shape[:2], dtype=np.uint8)
+    for (bbox, text, prob) in results:
+        # bbox: [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
+        pts = np.array(bbox, dtype=np.int32)
+        # Tô vùng chứa chữ lên mask (trắng: 255)
+        cv2.fillPoly(mask_dilated, [pts], 255) # type: ignore
 
-    # Chuyển sang PIL để dùng với LaMa
+    # Xoá caption bằng inpainting
+    inpainted_np = cv2.inpaint(image_np, mask_dilated, inpaintRadius=5, flags=cv2.INPAINT_NS)
+
+    # 5. Dùng LaMa refine lại vùng đó (PIL + mask)
     inpainted_pil = Image.fromarray(inpainted_np)
+    mask_pil = Image.fromarray(mask_dilated)
 
     final_image = run_lama(reader, inpainted_pil, mask_pil)
-    final_image.save(output_image, format="PNG")
 
-    # image_np = cv2.imread(input_image)
-    # if image_np is None:
-    #     print(f"⚠️ Không đọc được ảnh: {input_image}")
-    #     return
+    final_image.save(output_image, format="PNG") 
 
-    # results = reader.readtext(image_np)
-    # mask_dilated = np.zeros(image_np.shape[:2], dtype=np.uint8)
-
-    # for (bbox, text, prob) in results:
-    #     pts = np.array(bbox, dtype=np.int32)
-    #     cv2.fillPoly(mask_dilated, [pts], 255)
-
-    # inpainted_np = cv2.inpaint(image_np, mask_dilated, inpaintRadius=5, flags=cv2.INPAINT_NS)
-    # inpainted_pil = Image.fromarray(inpainted_np)
-    # mask_pil = Image.fromarray(mask_dilated)
-    # final_image = run_lama(reader, inpainted_pil, mask_pil)
-    # final_image.save(output_image, format="PNG")
-
-# def _process_remove_caption_on_frame(input_image, output_image):
-#     print('process image: ', str(input_image))
-#     image_np = cv2.imread(input_image)
-#     # image_np = np.array(input_image)
-
-#     # Dùng OCR để phát hiện caption (text)
-#     results = reader.readtext(image_np)
-
-#     # Tạo mask rỗng (đen hoàn toàn)
-#     mask_dilated = np.zeros(image_np.shape[:2], dtype=np.uint8)
-
-#     for (bbox, text, prob) in results:
-#         # bbox: [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
-#         pts = np.array(bbox, dtype=np.int32)
-#         # Tô vùng chứa chữ lên mask (trắng: 255)
-#         cv2.fillPoly(mask_dilated, [pts], 255) # type: ignore
-
-#     # Xoá caption bằng inpainting
-#     inpainted_np = cv2.inpaint(image_np, mask_dilated, inpaintRadius=5, flags=cv2.INPAINT_NS)
-
-#     # 5. Dùng LaMa refine lại vùng đó (PIL + mask)
-#     inpainted_pil = Image.fromarray(inpainted_np)
-#     mask_pil = Image.fromarray(mask_dilated)
-
-#     final_image = run_lama(inpainted_pil, mask_pil)
-
-#     # Trả về file ảnh
-#     final_image.save(output_image, format="PNG")
-
-# def frames_to_video(frame_dir, fps=30.0):
-#     print('frames to video')
-
-#     # Lấy danh sách file ảnh (chỉ lấy .png, .jpg)
-#     frame_files = [f for f in os.listdir(frame_dir) if f.lower().endswith(('.png', '.jpg'))]
-#     frame_files = natsorted(frame_files)  # Đảm bảo đúng thứ tự khung hình
-
-#     if not frame_files:
-#         print("❌ Không tìm thấy ảnh trong thư mục.")
-#         return
-
-#     output_path = Path('video-editted.mp4')
-
-#     # Đọc kích thước ảnh đầu tiên
-#     first_frame_path = os.path.join(frame_dir, frame_files[0])
-#     frame = cv2.imread(first_frame_path)
-#     height, width, _ = frame.shape
-
-#     # Tạo đối tượng VideoWriter
-#     fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # type: ignore # hoặc 'XVID'
-#     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-
-#     print(f"▶️ Bắt đầu ghép {len(frame_files)} ảnh thành video...")
-
-#     for file in frame_files:
-#         frame_path = os.path.join(frame_dir, file)
-#         img = cv2.imread(frame_path)
-#         if img is None:
-#             print(f"⚠️ Không đọc được ảnh: {file}")
-#             continue
-#         out.write(img)
-
-#     out.release()
-#     return output_path
-
-def frames_to_video_ffmpeg(frame_dir, fps=30):
+def frames_to_video(frame_dir, fps=30):
     frame_dir = Path(frame_dir)
     output_path = Path('video_editted.mp4')
 
