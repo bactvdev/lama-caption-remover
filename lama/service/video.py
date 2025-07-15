@@ -10,6 +10,7 @@ from omegaconf import OmegaConf
 from saicinpainting.training.trainers import load_checkpoint
 from saicinpainting.evaluation.data import pad_img_to_modulo
 from concurrent.futures import ProcessPoolExecutor
+import subprocess
 
 # --- Load model LaMa ---
 config_path = 'models/big-lama/config.yaml'
@@ -34,17 +35,25 @@ def split_video_to_frames(input_file) -> None:
     output_dir =  Path('frames')
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    cap = cv2.VideoCapture(str(input_file))
-    frame_num = 0
+    # cap = cv2.VideoCapture(str(input_file))
+    # frame_num = 0
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        cv2.imwrite(f"{output_dir}/frame_{frame_num:05d}.png", frame)
-        frame_num += 1
+    # while True:
+    #     ret, frame = cap.read()
+    #     if not ret:
+    #         break
+    #     cv2.imwrite(f"{output_dir}/frame_{frame_num:05d}.png", frame)
+    #     frame_num += 1
 
-    cap.release()
+    # cap.release()
+    # Tách frame ra thành JPEG chất lượng tốt
+    command = [
+        'ffmpeg',
+        '-i', str(input_file),
+        '-qscale:v', '2',
+        f'{output_dir}/frame_%05d.jpg'
+    ]
+    subprocess.run(command, check=True)
 
 # def remove_video_caption(input_file): 
 #     cap = cv2.VideoCapture(str(input_file))
