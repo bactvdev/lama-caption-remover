@@ -9,6 +9,7 @@ import easyocr
 from omegaconf import OmegaConf
 from saicinpainting.training.trainers import load_checkpoint
 from saicinpainting.evaluation.data import pad_img_to_modulo
+from concurrent.futures import ProcessPoolExecutor
 
 # --- Load model LaMa ---
 config_path = 'models/big-lama/config.yaml'
@@ -23,7 +24,7 @@ model = load_checkpoint(config, checkpoint_path, strict=False, map_location=devi
 model.to(device).eval()
 
 # --- EasyOCR ---
-reader = easyocr.Reader(['ch_sim', 'en'], gpu=torch.cuda.is_available())
+# reader = easyocr.Reader(['ch_sim', 'en'], gpu=torch.cuda.is_available())
 
 def is_dir_not_empty(path):
     return os.path.isdir(path) and any(os.scandir(path))
@@ -45,10 +46,38 @@ def split_video_to_frames(input_file) -> None:
 
     cap.release()
 
+# def remove_video_caption(input_file): 
+#     cap = cv2.VideoCapture(str(input_file))
+
+#     # Lấy FPS (frames per second)
+#     fps = cap.get(cv2.CAP_PROP_FPS)
+
+#     frames_dir = Path('frames')
+#     if not is_dir_not_empty(frames_dir):
+#         split_video_to_frames(input_file)
+
+#     frames_dir_output = Path('frames_editted')
+#     frames_dir_output.mkdir(parents=True, exist_ok=True)
+
+#     # task_list = []
+#     for file_name in os.listdir(frames_dir):
+#         if file_name.endswith('.png') or file_name.endswith('.jpg'):
+#             image = os.path.join(frames_dir, file_name)
+#             if not os.path.isfile(image):
+#                 continue
+            
+#             image_output_path = os.path.join(frames_dir_output, file_name)
+
+#             if not os.path.exists(image_output_path):
+#                 _process_remove_caption_on_frame(image, image_output_path)
+
+#     return frames_to_video(
+#         frame_dir=frames_dir_output,
+#         fps=fps,
+#     )
+
 def remove_video_caption(input_file): 
     cap = cv2.VideoCapture(str(input_file))
-
-    # Lấy FPS (frames per second)
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     frames_dir = Path('frames')
@@ -58,51 +87,89 @@ def remove_video_caption(input_file):
     frames_dir_output = Path('frames_editted')
     frames_dir_output.mkdir(parents=True, exist_ok=True)
 
-    # task_list = []
+    # Tạo danh sách các cặp (input_image, output_image)
+    tasks = []
     for file_name in os.listdir(frames_dir):
-        if file_name.endswith('.png') or file_name.endswith('.jpg'):
-            image = os.path.join(frames_dir, file_name)
-            if not os.path.isfile(image):
-                continue
-            
-            image_output_path = os.path.join(frames_dir_output, file_name)
+        if file_name.lower().endswith(('.png', '.jpg')):
+            input_path = frames_dir / file_name
+            output_path = frames_dir_output / file_name
+            if not output_path.exists():
+                tasks.append((str(input_path), str(output_path)))
 
-            if not os.path.exists(image_output_path):
-                _process_remove_caption_on_frame(image, image_output_path)
+    # Chạy xử lý song song
+    with ProcessPoolExecutor() as executor:
+        executor.map(_process_remove_caption_on_frame, tasks)
 
-    return frames_to_video(
-        frame_dir=frames_dir_output,
-        fps=fps,
-    )
+    return frames_to_video(frame_dir=frames_dir_output, fps=fps)
 
-def _process_remove_caption_on_frame(input_image, output_image):
-    print('process image: ', str(input_image))
-    image_np = cv2.imread(input_image)
-    # image_np = np.array(input_image)
+def _process_remove_caption_on_frame(image_path_output_tuple):
+    reader = easyocr.Reader(['ch_sim', 'en'], gpu=torch.cuda.is_available())
 
-    # Dùng OCR để phát hiện caption (text)
-    results = reader.readtext(image_np)
+    input_image, output_image = image_path_output_tuple
+    print('process image:', str(input_image))
 
-    # Tạo mask rỗng (đen hoàn toàn)
-    mask_dilated = np.zeros(image_np.shape[:2], dtype=np.uint8)
+    image_pil = Image.open(input_image).convert("RGB")
 
-    for (bbox, text, prob) in results:
-        # bbox: [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
-        pts = np.array(bbox, dtype=np.int32)
-        # Tô vùng chứa chữ lên mask (trắng: 255)
-        cv2.fillPoly(mask_dilated, [pts], 255) # type: ignore
+    # Tạo mask bằng hàm bạn viết
+    mask_pil = generate_mask_from_text(reader, image_pil)
 
-    # Xoá caption bằng inpainting
-    inpainted_np = cv2.inpaint(image_np, mask_dilated, inpaintRadius=5, flags=cv2.INPAINT_NS)
+    # Inpaint bằng OpenCV
+    image_np = np.array(image_pil)
+    mask_np = np.array(mask_pil)
+    inpainted_np = cv2.inpaint(image_np, mask_np, inpaintRadius=5, flags=cv2.INPAINT_NS)
 
-    # 5. Dùng LaMa refine lại vùng đó (PIL + mask)
+    # Chuyển sang PIL để dùng với LaMa
     inpainted_pil = Image.fromarray(inpainted_np)
-    mask_pil = Image.fromarray(mask_dilated)
 
-    final_image = run_lama(inpainted_pil, mask_pil)
-
-    # Trả về file ảnh
+    final_image = run_lama(reader, inpainted_pil, mask_pil)
     final_image.save(output_image, format="PNG")
+
+    # image_np = cv2.imread(input_image)
+    # if image_np is None:
+    #     print(f"⚠️ Không đọc được ảnh: {input_image}")
+    #     return
+
+    # results = reader.readtext(image_np)
+    # mask_dilated = np.zeros(image_np.shape[:2], dtype=np.uint8)
+
+    # for (bbox, text, prob) in results:
+    #     pts = np.array(bbox, dtype=np.int32)
+    #     cv2.fillPoly(mask_dilated, [pts], 255)
+
+    # inpainted_np = cv2.inpaint(image_np, mask_dilated, inpaintRadius=5, flags=cv2.INPAINT_NS)
+    # inpainted_pil = Image.fromarray(inpainted_np)
+    # mask_pil = Image.fromarray(mask_dilated)
+    # final_image = run_lama(reader, inpainted_pil, mask_pil)
+    # final_image.save(output_image, format="PNG")
+
+# def _process_remove_caption_on_frame(input_image, output_image):
+#     print('process image: ', str(input_image))
+#     image_np = cv2.imread(input_image)
+#     # image_np = np.array(input_image)
+
+#     # Dùng OCR để phát hiện caption (text)
+#     results = reader.readtext(image_np)
+
+#     # Tạo mask rỗng (đen hoàn toàn)
+#     mask_dilated = np.zeros(image_np.shape[:2], dtype=np.uint8)
+
+#     for (bbox, text, prob) in results:
+#         # bbox: [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
+#         pts = np.array(bbox, dtype=np.int32)
+#         # Tô vùng chứa chữ lên mask (trắng: 255)
+#         cv2.fillPoly(mask_dilated, [pts], 255) # type: ignore
+
+#     # Xoá caption bằng inpainting
+#     inpainted_np = cv2.inpaint(image_np, mask_dilated, inpaintRadius=5, flags=cv2.INPAINT_NS)
+
+#     # 5. Dùng LaMa refine lại vùng đó (PIL + mask)
+#     inpainted_pil = Image.fromarray(inpainted_np)
+#     mask_pil = Image.fromarray(mask_dilated)
+
+#     final_image = run_lama(inpainted_pil, mask_pil)
+
+#     # Trả về file ảnh
+#     final_image.save(output_image, format="PNG")
 
 def frames_to_video(frame_dir, fps=30.0):
     print('frames to video')
@@ -140,7 +207,7 @@ def frames_to_video(frame_dir, fps=30.0):
     return output_path
 
 # --- Tạo mask tự động từ caption ---
-def generate_mask_from_text(image: Image.Image) -> Image.Image:
+def generate_mask_from_text(reader, image: Image.Image) -> Image.Image:
     image_np = np.array(image.convert("RGB"))
     h, w = image_np.shape[:2]
     results = reader.readtext(image_np)
@@ -158,7 +225,7 @@ def generate_mask_from_text(image: Image.Image) -> Image.Image:
     return mask_image
 
 # --- Xử lý inpaint bằng LaMa ---
-def run_lama(image: Image.Image, mask: Image.Image) -> Image.Image:
+def run_lama(reader, image: Image.Image, mask: Image.Image) -> Image.Image:
     # Convert PIL → numpy
     img = np.array(image.convert("RGB"))  # shape: (H, W, 3)
     msk = np.array(mask.convert("L"))     # shape: (H, W)
