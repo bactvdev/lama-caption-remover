@@ -181,39 +181,74 @@ def _process_remove_caption_on_frame(image_path_output_tuple):
 #     # Trả về file ảnh
 #     final_image.save(output_image, format="PNG")
 
-def frames_to_video(frame_dir, fps=30.0):
-    print('frames to video')
+# def frames_to_video(frame_dir, fps=30.0):
+#     print('frames to video')
 
-    # Lấy danh sách file ảnh (chỉ lấy .png, .jpg)
-    frame_files = [f for f in os.listdir(frame_dir) if f.lower().endswith(('.png', '.jpg'))]
-    frame_files = natsorted(frame_files)  # Đảm bảo đúng thứ tự khung hình
+#     # Lấy danh sách file ảnh (chỉ lấy .png, .jpg)
+#     frame_files = [f for f in os.listdir(frame_dir) if f.lower().endswith(('.png', '.jpg'))]
+#     frame_files = natsorted(frame_files)  # Đảm bảo đúng thứ tự khung hình
 
+#     if not frame_files:
+#         print("❌ Không tìm thấy ảnh trong thư mục.")
+#         return
+
+#     output_path = Path('video-editted.mp4')
+
+#     # Đọc kích thước ảnh đầu tiên
+#     first_frame_path = os.path.join(frame_dir, frame_files[0])
+#     frame = cv2.imread(first_frame_path)
+#     height, width, _ = frame.shape
+
+#     # Tạo đối tượng VideoWriter
+#     fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # type: ignore # hoặc 'XVID'
+#     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+#     print(f"▶️ Bắt đầu ghép {len(frame_files)} ảnh thành video...")
+
+#     for file in frame_files:
+#         frame_path = os.path.join(frame_dir, file)
+#         img = cv2.imread(frame_path)
+#         if img is None:
+#             print(f"⚠️ Không đọc được ảnh: {file}")
+#             continue
+#         out.write(img)
+
+#     out.release()
+#     return output_path
+
+def frames_to_video_ffmpeg(frame_dir, fps=30):
+    frame_dir = Path(frame_dir)
+    output_path = Path('video_editted.mp4')
+
+    # Kiểm tra có frame không
+    frame_files = [f for f in os.listdir(frame_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
     if not frame_files:
         print("❌ Không tìm thấy ảnh trong thư mục.")
-        return
+        return None
 
-    output_path = Path('video-editted.mp4')
+    # Đảm bảo thứ tự và tên ảnh đúng định dạng ffmpeg (frame_00001.jpg)
+    frame_files = natsorted(frame_files)
+    first_file = frame_files[0]
+    if not first_file.startswith('frame_') or not '%05d' in first_file:
+        print("⚠️ FFmpeg yêu cầu tên file theo mẫu: frame_%05d.jpg (frame_00001.jpg, ...)")
+        print("💡 Bạn nên đổi tên trước khi dùng FFmpeg.")
+        return None
 
-    # Đọc kích thước ảnh đầu tiên
-    first_frame_path = os.path.join(frame_dir, frame_files[0])
-    frame = cv2.imread(first_frame_path)
-    height, width, _ = frame.shape
+    # Chạy FFmpeg để ghép video
+    input_pattern = str(frame_dir / 'frame_%05d.jpg')  # hoặc .png nếu bạn dùng PNG
+    command = [
+        'ffmpeg',
+        '-y',                        # Ghi đè nếu file đã tồn tại
+        '-framerate', str(fps),
+        '-i', input_pattern,
+        '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
+        str(output_path)
+    ]
 
-    # Tạo đối tượng VideoWriter
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # type: ignore # hoặc 'XVID'
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-
-    print(f"▶️ Bắt đầu ghép {len(frame_files)} ảnh thành video...")
-
-    for file in frame_files:
-        frame_path = os.path.join(frame_dir, file)
-        img = cv2.imread(frame_path)
-        if img is None:
-            print(f"⚠️ Không đọc được ảnh: {file}")
-            continue
-        out.write(img)
-
-    out.release()
+    print(f"▶️ Đang ghép video từ {len(frame_files)} ảnh...")
+    subprocess.run(command, check=True)
+    print(f"✅ Video đã lưu tại: {output_path}")
     return output_path
 
 # --- Tạo mask tự động từ caption ---
