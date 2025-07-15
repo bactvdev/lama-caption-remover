@@ -9,7 +9,7 @@ import easyocr
 from omegaconf import OmegaConf
 from saicinpainting.training.trainers import load_checkpoint
 from saicinpainting.evaluation.data import pad_img_to_modulo
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import subprocess
 
 # --- Load model LaMa ---
@@ -106,7 +106,8 @@ def remove_video_caption(input_file):
                 tasks.append((str(input_path), str(output_path)))
 
     # Chạy xử lý song song
-    with ProcessPoolExecutor() as executor:
+    max_workers = min(8, os.cpu_count()) # type: ignore
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         executor.map(_process_remove_caption_on_frame, tasks)
 
     return frames_to_video(frame_dir=frames_dir_output, fps=fps)
