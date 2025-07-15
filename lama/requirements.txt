@@ -1,6 +1,5 @@
 pyyaml
 tqdm
-numpy
 easydict
 scikit-image
 scikit-learn
